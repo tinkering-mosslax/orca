@@ -1,0 +1,150 @@
+From 87ccc8d4ea4401472184cb39049d4a4af201f1f7 Mon Sep 17 00:00:00 2001
+From: tinkering-mosslax <noreply@anthropic.com>
+Date: Sun, 22 Nov 2026 16:06:10 +0000
+Subject: [PATCH 3/3] feat(appearance): glass setup uses acrylic; drop the Mica
+ wallpaper material
+
+Mica Alt tinted the wallpaper too dark to read as see-through. Glass setup
+now picks Acrylic blur; profiles that chose the wallpaper material fall back
+to acrylic through the legacy blur switch.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BzRYcB3nt6GJFqwqhLuiSY
+---
+ .../applying-settings/settings-update.ts          |  7 +------
+ .../presentation/window-material-options.ts       |  8 ++------
+ .../settings/appearance/GlassInterfaceSetting.tsx |  4 ++--
+ .../settings/appearance/WindowMaterialSetting.tsx |  3 ---
+ src/renderer/src/i18n/locales/en.json             |  1 -
+ .../app-lifecycle/windows/window-material.ts      | 15 ++++++---------
+ 6 files changed, 11 insertions(+), 27 deletions(-)
+
+diff --git a/src/main/persistence/applying-settings/settings-update.ts b/src/main/persistence/applying-settings/settings-update.ts
+index 14b63ed5..d541798f 100644
+--- a/src/main/persistence/applying-settings/settings-update.ts
++++ b/src/main/persistence/applying-settings/settings-update.ts
+@@ -67,12 +67,7 @@ export function updateSettings(
+     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
+   }
+   const windowMaterial = updates.windowMaterial
+-  if (
+-    windowMaterial === 'off' ||
+-    windowMaterial === 'translucent' ||
+-    windowMaterial === 'blur' ||
+-    windowMaterial === 'wallpaper'
+-  ) {
++  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
+     // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
+     sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
+   }
+diff --git a/src/main/window/presentation/window-material-options.ts b/src/main/window/presentation/window-material-options.ts
+index f7054597..70a929e2 100644
+--- a/src/main/window/presentation/window-material-options.ts
++++ b/src/main/window/presentation/window-material-options.ts
+@@ -22,16 +22,12 @@ export function windowMaterialOptions(
+   if (platform === 'darwin') {
+     // Why no `transparent` with vibrancy: it suppresses the effect view and forces full-window alpha compositing (#8482).
+     // Why active: the default follows focus and turns into a flat gray fill whenever Orca is unfocused.
+-    return material !== 'translucent'
++    return material === 'blur'
+       ? { backgroundColor: CLEAR, vibrancy: MAC_BLUR_VIBRANCY, visualEffectState: 'active' }
+       : { backgroundColor: CLEAR, transparent: true }
+   }
+   if (platform === 'win32') {
+-    // Why Mica Alt for wallpaper: DWM samples only the wallpaper, once, so it costs less than live acrylic.
+-    return {
+-      backgroundColor: CLEAR,
+-      backgroundMaterial: material === 'wallpaper' ? 'tabbed' : 'acrylic'
+-    }
++    return { backgroundColor: CLEAR, backgroundMaterial: 'acrylic' }
+   }
+   // Linux compositors (KWin, Mutter, Hyprland, picom) blend alpha windows and apply their own blur rules.
+   return { backgroundColor: CLEAR, transparent: true }
+diff --git a/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+index 992ebefd..1bd8bf87 100644
+--- a/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
++++ b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+@@ -16,8 +16,8 @@ type GlassInterfaceSettingProps = {
+   updateSettings: (updates: Partial<GlobalSettings>) => void
+ }
+ 
+-// Why wallpaper first: it shows the user's wallpaper rather than whatever window sits behind, at the lowest cost.
+-const PREFERRED_MATERIALS: readonly WindowMaterial[] = ['wallpaper', 'blur', 'translucent']
++// Why blur first: frosted see-through keeps text legible over whatever sits behind the window.
++const PREFERRED_MATERIALS: readonly WindowMaterial[] = ['blur', 'translucent']
+ const GLASS_DEFAULT_OPACITY = 0.6
+ 
+ /** Enabling glass also supplies a backdrop when there is none, so the switch works in one step. */
+diff --git a/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx b/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
+index f85be1fa..8e37ba75 100644
+--- a/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
++++ b/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
+@@ -37,9 +37,6 @@ function windowMaterialLabel(
+   if (material === 'translucent') {
+     return t('settings.windowMaterial.translucent', 'Translucent')
+   }
+-  if (material === 'wallpaper') {
+-    return t('settings.windowMaterial.wallpaper', 'Desktop wallpaper')
+-  }
+   return host.platform === 'win32'
+     ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
+     : t('settings.windowMaterial.blur', 'Blurred')
+diff --git a/src/renderer/src/i18n/locales/en.json b/src/renderer/src/i18n/locales/en.json
+index c0e1e748..02e203dd 100644
+--- a/src/renderer/src/i18n/locales/en.json
++++ b/src/renderer/src/i18n/locales/en.json
+@@ -1753,7 +1753,6 @@
+       "description": "What shows behind translucent terminals. Requires restart.",
+       "off": "Opaque",
+       "translucent": "Translucent",
+-      "wallpaper": "Desktop wallpaper",
+       "acrylic": "Acrylic blur",
+       "blur": "Blurred",
+       "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",
+diff --git a/src/shared/app-lifecycle/windows/window-material.ts b/src/shared/app-lifecycle/windows/window-material.ts
+index 09f13016..4956ca30 100644
+--- a/src/shared/app-lifecycle/windows/window-material.ts
++++ b/src/shared/app-lifecycle/windows/window-material.ts
+@@ -1,6 +1,5 @@
+-/** What sits behind the main window's translucent surfaces: nothing, the desktop, the blurred
+- *  desktop, or (Windows 11) the desktop wallpaper alone, sampled once instead of blurred live. */
+-export type WindowMaterial = 'off' | 'translucent' | 'blur' | 'wallpaper'
++/** What sits behind the main window's translucent surfaces: nothing, the desktop, or the blurred desktop. */
++export type WindowMaterial = 'off' | 'translucent' | 'blur'
+ 
+ const WINDOW_MATERIAL_ARGUMENT_PREFIX = '--orca-window-material='
+ 
+@@ -18,7 +17,7 @@ export type WindowMaterialSettings = {
+ type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }
+ 
+ function isWindowMaterial(value: unknown): value is WindowMaterial {
+-  return value === 'off' || value === 'translucent' || value === 'blur' || value === 'wallpaper'
++  return value === 'off' || value === 'translucent' || value === 'blur'
+ }
+ 
+ /** The user's choice. Profiles from before `windowMaterial` carry it in the legacy blur switch,
+@@ -46,7 +45,7 @@ export function selectableWindowMaterials(host: WindowMaterialHost): readonly Wi
+   }
+   if (host.platform === 'win32') {
+     const build = Number(host.osRelease.split('.')[2])
+-    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'wallpaper', 'blur'] : ['off']
++    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'blur'] : ['off']
+   }
+   return ['off', 'translucent']
+ }
+@@ -60,10 +59,8 @@ export function hostWindowMaterial(
+   if (selectable.includes(material)) {
+     return material
+   }
+-  // Why blur-ward only: unblurred see-through never silently becomes a blur effect.
+-  const fallbacks: readonly WindowMaterial[] =
+-    material === 'wallpaper' ? ['blur', 'translucent'] : material === 'blur' ? ['translucent'] : []
+-  return fallbacks.find((fallback) => selectable.includes(fallback)) ?? 'off'
++  // Why only blur degrades: unblurred see-through never silently becomes a blur effect.
++  return material === 'blur' && selectable.includes('translucent') ? 'translucent' : 'off'
+ }
+ 
+ /**
+-- 
+2.43.0
+

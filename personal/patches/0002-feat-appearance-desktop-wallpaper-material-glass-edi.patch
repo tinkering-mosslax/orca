@@ -1,7 +1,7 @@
 From a714fa39a643859d7de16f328e7d4339bdc42db5 Mon Sep 17 00:00:00 2001
 From: Orca Glass <noreply@anthropic.com>
 Date: Sun, 22 Nov 2026 14:12:50 +0000
-Subject: [PATCH 2/2] feat(appearance): desktop wallpaper material, glass
+Subject: [PATCH 2/3] feat(appearance): desktop wallpaper material, glass
  editor, one-step setup
 
 Adds a Desktop wallpaper window material on Windows 11 (DWM Mica Alt): it
