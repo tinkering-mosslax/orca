@@ -35,8 +35,17 @@
   --worktree-sidebar-border: var(--border);
 }
 
-/* Sticky rows sit over scrolled content; frost them instead of letting rows show through. */
+/* Editors sit on a glass pane already; their own fill would stack a second, opaque layer.
+   Overlays (sticky scroll, find, hovers) keep their fills so scrolled text never bleeds through. */
+:root[data-glass-interface] #root .monaco-editor,
+:root[data-glass-interface] #root .monaco-editor .margin,
+:root[data-glass-interface] #root .monaco-editor-background {
+  background-color: transparent;
+}
+
+/* Sticky rows sit over the same glass as the rows beneath: a fill would band, so frost instead.
+   The strip is one row tall, which keeps the blur's compositing cost negligible. */
 :root[data-glass-interface] #root [data-worktree-sticky-header] {
   background-color: transparent;
-  backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px);
 }

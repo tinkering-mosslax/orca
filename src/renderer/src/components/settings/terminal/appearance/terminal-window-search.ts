@@ -47,7 +47,7 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     title: translate('settings.windowMaterial.glassInterface', 'Glass interface'),
     description: translate(
       'settings.windowMaterial.glassInterfaceDescription',
-      'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
+      'Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.'
     ),
     keywords: [
       ...translateSearchKeyword('settings.windowMaterial.keywords.glass', 'glass'),

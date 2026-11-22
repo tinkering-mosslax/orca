@@ -1761,6 +1761,7 @@
       "description": "What shows behind translucent terminals. Requires restart.",
       "off": "Opaque",
       "translucent": "Translucent",
+      "wallpaper": "Desktop wallpaper",
       "acrylic": "Acrylic blur",
       "blur": "Blurred",
       "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",
@@ -1773,7 +1774,7 @@
         "sidebar": "sidebar"
       },
       "glassInterface": "Glass interface",
-      "glassInterfaceDescription": "Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.",
+      "glassInterfaceDescription": "Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.",
       "glassInterfaceNeedsBackdrop": "Shows once a window material or theme image is active and Background opacity is below 1.",
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
       "fc2ba9b528": "Window material"

@@ -37,6 +37,9 @@ function windowMaterialLabel(
   if (material === 'translucent') {
     return t('settings.windowMaterial.translucent', 'Translucent')
   }
+  if (material === 'wallpaper') {
+    return t('settings.windowMaterial.wallpaper', 'Desktop wallpaper')
+  }
   return host.platform === 'win32'
     ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
     : t('settings.windowMaterial.blur', 'Blurred')
@@ -80,7 +83,7 @@ function windowMaterialHint(
     : description
 }
 
-function RestartBanner(): React.JSX.Element {
+export function RestartBanner(): React.JSX.Element {
   const t = useTranslate()
   const [relaunching, setRelaunching] = useState(false)
   const mountedRef = useMountedRef()
@@ -128,6 +131,17 @@ function RestartBanner(): React.JSX.Element {
   )
 }
 
+/** The window would be created with a different material than it was; opacity and Reduce Visual Effects count too. */
+export function windowMaterialRestartPending(settings: GlobalSettings): boolean {
+  return (
+    resolveWindowMaterial(
+      settings,
+      rendererWindowMaterialHost(),
+      readPrefersReducedTransparency()
+    ) !== activeWindowMaterial()
+  )
+}
+
 /** Desktop main window only; the web client cannot create or restart the host's window. */
 export function WindowMaterialSetting({
   settings,
@@ -137,10 +151,8 @@ export function WindowMaterialSetting({
   const host = rendererWindowMaterialHost()
   const selectable = selectableWindowMaterials(host)
   const label = t('settings.windowMaterial.fc2ba9b528', 'Window material')
-  // Why compare resolved values: opacity and Reduce Visual Effects also decide the material.
-  const restartPending =
-    resolveWindowMaterial(settings, host, readPrefersReducedTransparency()) !==
-    activeWindowMaterial()
+  // Why glass owns it when on: enabling glass sets the material, and search may show only that row.
+  const showRestart = windowMaterialRestartPending(settings) && settings.glassInterface !== true
 
   return (
     <>
@@ -171,7 +183,7 @@ export function WindowMaterialSetting({
           </Select>
         }
       />
-      {restartPending ? <RestartBanner /> : null}
+      {showRestart ? <RestartBanner /> : null}
     </>
   )
 }

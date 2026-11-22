@@ -67,7 +67,12 @@ export function updateSettings(
     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
   }
   const windowMaterial = updates.windowMaterial
-  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
+  if (
+    windowMaterial === 'off' ||
+    windowMaterial === 'translucent' ||
+    windowMaterial === 'blur' ||
+    windowMaterial === 'wallpaper'
+  ) {
     // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
     sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
   }

@@ -90,9 +90,10 @@ export function TerminalWindowSection({
         title={t('settings.windowMaterial.glassInterface', 'Glass interface')}
         description={t(
           'settings.windowMaterial.glassInterfaceDescription',
-          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
+          'Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.'
         )}
-        keywords={['glass', 'acrylic', 'translucent', 'transparency', 'sidebar', 'blur']}
+        keywords={['glass', 'acrylic', 'wallpaper', 'translucent', 'transparency', 'sidebar']}
+        className="space-y-3 py-2"
       >
         <GlassInterfaceSetting settings={settings} updateSettings={updateSettings} />
       </SearchableSetting>
