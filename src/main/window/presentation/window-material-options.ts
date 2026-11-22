@@ -27,11 +27,10 @@ export function windowMaterialOptions(
       : { backgroundColor: CLEAR, transparent: true }
   }
   if (platform === 'win32') {
-    // Why Mica Alt for wallpaper: DWM samples only the wallpaper, once, so it costs less than live acrylic.
-    return {
-      backgroundColor: CLEAR,
-      backgroundMaterial: material === 'wallpaper' ? 'tabbed' : 'acrylic'
-    }
+    // Why opaque for wallpaper: the renderer paints the wallpaper itself, sharper than Mica and with no DWM cost.
+    return material === 'wallpaper'
+      ? { backgroundColor: opaqueBackground }
+      : { backgroundColor: CLEAR, backgroundMaterial: 'acrylic' }
   }
   // Linux compositors (KWin, Mutter, Hyprland, picom) blend alpha windows and apply their own blur rules.
   return { backgroundColor: CLEAR, transparent: true }

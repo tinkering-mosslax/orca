@@ -1,4 +1,8 @@
 import { ipcRenderer } from 'electron'
+import type {
+  DesktopWallpaper,
+  WindowPlacement
+} from '../../shared/app-lifecycle/windows/desktop-wallpaper'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
@@ -43,6 +47,16 @@ export const appApi = {
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
   setWindowMaterialSuppressed: (suppressed: boolean): Promise<void> =>
     ipcRenderer.invoke('app:setWindowMaterialSuppressed', suppressed),
+  getDesktopWallpaper: (): Promise<DesktopWallpaper | null> =>
+    ipcRenderer.invoke('app:getDesktopWallpaper'),
+  getWindowPlacement: (): Promise<WindowPlacement | null> =>
+    ipcRenderer.invoke('app:getWindowPlacement'),
+  onWindowPlacementChanged: (callback: (placement: WindowPlacement) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, placement: WindowPlacement): void =>
+      callback(placement)
+    ipcRenderer.on('app:windowPlacementChanged', listener)
+    return () => ipcRenderer.removeListener('app:windowPlacementChanged', listener)
+  },
   relaunch: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,

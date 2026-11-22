@@ -10,6 +10,7 @@ import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/presentation/window-material-suppression'
+import { readDesktopWallpaper, readWindowPlacement } from '../window/presentation/desktop-wallpaper'
 import { isTrustedUIRenderer } from './ui'
 import { prepareWindowsAdministratorRestart } from '../windows/windows-administrator-restart'
 import { quitProcess } from '../startup/quit/process-quit-request'
@@ -196,6 +197,17 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     if (window && typeof suppressed === 'boolean') {
       setWindowMaterialSuppressed(window, suppressed)
     }
+  })
+
+  ipcMain.handle('app:getDesktopWallpaper', (event) =>
+    isTrustedUIRenderer(event.sender) ? readDesktopWallpaper() : null
+  )
+
+  ipcMain.handle('app:getWindowPlacement', (event) => {
+    const window = isTrustedUIRenderer(event.sender)
+      ? BrowserWindow.fromWebContents(event.sender)
+      : null
+    return window ? readWindowPlacement(window) : null
   })
 
   ipcMain.handle('app:relaunch', async () => {

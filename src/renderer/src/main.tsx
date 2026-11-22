@@ -30,6 +30,7 @@ import { handleGuestWindowCloseMessage } from './components/browser-pane/host-gu
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'
+import { installDesktopWallpaper } from './app-shell/appearance/desktop-wallpaper'
 import {
   trackPageFocusLossForTerminalIme,
   trackWindowActivationForTerminalDragRegions
@@ -60,6 +61,7 @@ if (
 }
 
 applyWindowMaterialToDocument()
+installDesktopWallpaper()
 const cachedPluginTheme = readCachedPluginAppTheme()
 applyDocumentTheme(cachedPluginTheme?.base ?? 'system', { disableTransitions: false })
 if (cachedPluginTheme) {

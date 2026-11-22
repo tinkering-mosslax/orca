@@ -1,4 +1,8 @@
 import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
+import type {
+  DesktopWallpaper,
+  WindowPlacement
+} from '../../shared/app-lifecycle/windows/desktop-wallpaper'
 import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
@@ -34,6 +38,10 @@ export type AppApi = {
   getFeatureWallAssetBaseUrl: () => Promise<string>
   /** Drops macOS vibrancy while an opaque theme image covers it; no-op otherwise. */
   setWindowMaterialSuppressed: (suppressed: boolean) => Promise<void>
+  /** The Windows desktop wallpaper, painted behind the Desktop wallpaper window material; null elsewhere. */
+  getDesktopWallpaper: () => Promise<DesktopWallpaper | null>
+  getWindowPlacement: () => Promise<WindowPlacement | null>
+  onWindowPlacementChanged: (callback: (placement: WindowPlacement) => void) => () => void
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */

@@ -49,3 +49,19 @@
   background-color: transparent;
   backdrop-filter: blur(8px);
 }
+
+/* Desktop wallpaper material (desktop-wallpaper.ts): the wallpaper as one fixed layer, offset so it
+   lines up with the desktop. A theme image takes precedence and paints its own opaque base. */
+:root[data-desktop-wallpaper]:not([data-theme-background]) body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--orca-wallpaper-width, 100vw);
+  height: var(--orca-wallpaper-height, 100vh);
+  transform: translate(var(--orca-wallpaper-x, 0), var(--orca-wallpaper-y, 0));
+  background: var(--orca-wallpaper-image) center / var(--orca-wallpaper-size, cover)
+    var(--orca-wallpaper-repeat, no-repeat);
+  pointer-events: none;
+}

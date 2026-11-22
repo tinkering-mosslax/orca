@@ -13,6 +13,7 @@ import {
 } from '../../shared/app-lifecycle/windows/window-material'
 import { windowMaterialOptions } from './presentation/window-material-options'
 import { rememberWindowMaterial } from './presentation/window-material-suppression'
+import { installWindowPlacementRelay } from './presentation/desktop-wallpaper'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
@@ -173,6 +174,9 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
+  if (windowMaterial === 'wallpaper') {
+    installWindowPlacementRelay(mainWindow)
+  }
   mainWindow.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   mainWindow.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
