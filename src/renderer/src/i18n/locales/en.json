@@ -1761,7 +1761,6 @@
       "description": "What shows behind translucent terminals. Requires restart.",
       "off": "Opaque",
       "translucent": "Translucent",
-      "wallpaper": "Desktop wallpaper",
       "acrylic": "Acrylic blur",
       "blur": "Blurred",
       "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",

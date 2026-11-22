@@ -37,9 +37,6 @@ function windowMaterialLabel(
   if (material === 'translucent') {
     return t('settings.windowMaterial.translucent', 'Translucent')
   }
-  if (material === 'wallpaper') {
-    return t('settings.windowMaterial.wallpaper', 'Desktop wallpaper')
-  }
   return host.platform === 'win32'
     ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
     : t('settings.windowMaterial.blur', 'Blurred')

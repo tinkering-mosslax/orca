@@ -16,8 +16,8 @@ type GlassInterfaceSettingProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
-// Why wallpaper first: it shows the user's wallpaper rather than whatever window sits behind, at the lowest cost.
-const PREFERRED_MATERIALS: readonly WindowMaterial[] = ['wallpaper', 'blur', 'translucent']
+// Why blur first: frosted see-through keeps text legible over whatever sits behind the window.
+const PREFERRED_MATERIALS: readonly WindowMaterial[] = ['blur', 'translucent']
 const GLASS_DEFAULT_OPACITY = 0.6
 
 /** Enabling glass also supplies a backdrop when there is none, so the switch works in one step. */

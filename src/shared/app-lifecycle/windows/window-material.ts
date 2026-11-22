@@ -1,6 +1,5 @@
-/** What sits behind the main window's translucent surfaces: nothing, the desktop, the blurred
- *  desktop, or (Windows 11) the desktop wallpaper alone, sampled once instead of blurred live. */
-export type WindowMaterial = 'off' | 'translucent' | 'blur' | 'wallpaper'
+/** What sits behind the main window's translucent surfaces: nothing, the desktop, or the blurred desktop. */
+export type WindowMaterial = 'off' | 'translucent' | 'blur'
 
 const WINDOW_MATERIAL_ARGUMENT_PREFIX = '--orca-window-material='
 
@@ -18,7 +17,7 @@ export type WindowMaterialSettings = {
 type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }
 
 function isWindowMaterial(value: unknown): value is WindowMaterial {
-  return value === 'off' || value === 'translucent' || value === 'blur' || value === 'wallpaper'
+  return value === 'off' || value === 'translucent' || value === 'blur'
 }
 
 /** The user's choice. Profiles from before `windowMaterial` carry it in the legacy blur switch,
@@ -46,7 +45,7 @@ export function selectableWindowMaterials(host: WindowMaterialHost): readonly Wi
   }
   if (host.platform === 'win32') {
     const build = Number(host.osRelease.split('.')[2])
-    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'wallpaper', 'blur'] : ['off']
+    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'blur'] : ['off']
   }
   return ['off', 'translucent']
 }
@@ -60,10 +59,8 @@ export function hostWindowMaterial(
   if (selectable.includes(material)) {
     return material
   }
-  // Why blur-ward only: unblurred see-through never silently becomes a blur effect.
-  const fallbacks: readonly WindowMaterial[] =
-    material === 'wallpaper' ? ['blur', 'translucent'] : material === 'blur' ? ['translucent'] : []
-  return fallbacks.find((fallback) => selectable.includes(fallback)) ?? 'off'
+  // Why only blur degrades: unblurred see-through never silently becomes a blur effect.
+  return material === 'blur' && selectable.includes('translucent') ? 'translucent' : 'off'
 }
 
 /**
