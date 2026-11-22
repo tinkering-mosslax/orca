@@ -1,0 +1,330 @@
+From a714fa39a643859d7de16f328e7d4339bdc42db5 Mon Sep 17 00:00:00 2001
+From: Orca Glass <noreply@anthropic.com>
+Date: Sun, 22 Nov 2026 14:12:50 +0000
+Subject: [PATCH 2/2] feat(appearance): desktop wallpaper material, glass
+ editor, one-step setup
+
+Adds a Desktop wallpaper window material on Windows 11 (DWM Mica Alt): it
+shows only the wallpaper and is sampled once, so it costs less than live
+acrylic. Code editors now sit on the glass instead of painting an opaque
+fill. Turning on Glass interface supplies a backdrop when none is set
+(wallpaper first) and a 0.6 Background opacity when terminals are opaque,
+and shows the restart prompt in its own row.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BzRYcB3nt6GJFqwqhLuiSY
+---
+ .../applying-settings/settings-update.ts      |  7 ++-
+ .../presentation/window-material-options.ts   |  8 ++-
+ src/renderer/src/assets/glass-interface.css   | 13 ++++-
+ .../appearance/GlassInterfaceSetting.tsx      | 50 ++++++++++++++++---
+ .../appearance/WindowMaterialSetting.tsx      | 24 ++++++---
+ .../appearance/TerminalWindowSection.tsx      |  5 +-
+ .../appearance/terminal-window-search.ts      |  2 +-
+ src/renderer/src/i18n/locales/en.json         |  3 +-
+ .../app-lifecycle/windows/window-material.ts  | 15 +++---
+ 9 files changed, 99 insertions(+), 28 deletions(-)
+
+diff --git a/src/main/persistence/applying-settings/settings-update.ts b/src/main/persistence/applying-settings/settings-update.ts
+index d541798f..14b63ed5 100644
+--- a/src/main/persistence/applying-settings/settings-update.ts
++++ b/src/main/persistence/applying-settings/settings-update.ts
+@@ -67,7 +67,12 @@ export function updateSettings(
+     sanitizedUpdates.terminalLinkActionPopoverEnabled = linkBehavior === 'actions'
+   }
+   const windowMaterial = updates.windowMaterial
+-  if (windowMaterial === 'off' || windowMaterial === 'translucent' || windowMaterial === 'blur') {
++  if (
++    windowMaterial === 'off' ||
++    windowMaterial === 'translucent' ||
++    windowMaterial === 'blur' ||
++    windowMaterial === 'wallpaper'
++  ) {
+     // Every writer (settings, Ghostty import) mirrors the legacy switch an older Orca reads after rollback.
+     sanitizedUpdates.windowBackgroundBlur = windowMaterial !== 'off'
+   }
+diff --git a/src/main/window/presentation/window-material-options.ts b/src/main/window/presentation/window-material-options.ts
+index 70a929e2..f7054597 100644
+--- a/src/main/window/presentation/window-material-options.ts
++++ b/src/main/window/presentation/window-material-options.ts
+@@ -22,12 +22,16 @@ export function windowMaterialOptions(
+   if (platform === 'darwin') {
+     // Why no `transparent` with vibrancy: it suppresses the effect view and forces full-window alpha compositing (#8482).
+     // Why active: the default follows focus and turns into a flat gray fill whenever Orca is unfocused.
+-    return material === 'blur'
++    return material !== 'translucent'
+       ? { backgroundColor: CLEAR, vibrancy: MAC_BLUR_VIBRANCY, visualEffectState: 'active' }
+       : { backgroundColor: CLEAR, transparent: true }
+   }
+   if (platform === 'win32') {
+-    return { backgroundColor: CLEAR, backgroundMaterial: 'acrylic' }
++    // Why Mica Alt for wallpaper: DWM samples only the wallpaper, once, so it costs less than live acrylic.
++    return {
++      backgroundColor: CLEAR,
++      backgroundMaterial: material === 'wallpaper' ? 'tabbed' : 'acrylic'
++    }
+   }
+   // Linux compositors (KWin, Mutter, Hyprland, picom) blend alpha windows and apply their own blur rules.
+   return { backgroundColor: CLEAR, transparent: true }
+diff --git a/src/renderer/src/assets/glass-interface.css b/src/renderer/src/assets/glass-interface.css
+index a3c498c1..9daabec7 100644
+--- a/src/renderer/src/assets/glass-interface.css
++++ b/src/renderer/src/assets/glass-interface.css
+@@ -35,8 +35,17 @@
+   --worktree-sidebar-border: var(--border);
+ }
+ 
+-/* Sticky rows sit over scrolled content; frost them instead of letting rows show through. */
++/* Editors sit on a glass pane already; their own fill would stack a second, opaque layer.
++   Overlays (sticky scroll, find, hovers) keep their fills so scrolled text never bleeds through. */
++:root[data-glass-interface] #root .monaco-editor,
++:root[data-glass-interface] #root .monaco-editor .margin,
++:root[data-glass-interface] #root .monaco-editor-background {
++  background-color: transparent;
++}
++
++/* Sticky rows sit over the same glass as the rows beneath: a fill would band, so frost instead.
++   The strip is one row tall, which keeps the blur's compositing cost negligible. */
+ :root[data-glass-interface] #root [data-worktree-sticky-header] {
+   background-color: transparent;
+-  backdrop-filter: blur(12px);
++  backdrop-filter: blur(8px);
+ }
+diff --git a/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+index d3d3f028..992ebefd 100644
+--- a/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
++++ b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+@@ -1,6 +1,14 @@
+ import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
++import {
++  selectableWindowMaterials,
++  windowMaterialPreference,
++  type WindowMaterial
++} from '../../../../../shared/app-lifecycle/windows/window-material'
+ import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
++import { RestartBanner, windowMaterialRestartPending } from './WindowMaterialSetting'
+ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
++import { rendererWindowMaterialHost } from '@/app-shell/appearance/window-material-runtime'
++import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+ import { useTranslate } from '@/i18n/use-translate'
+ 
+ type GlassInterfaceSettingProps = {
+@@ -8,6 +16,27 @@ type GlassInterfaceSettingProps = {
+   updateSettings: (updates: Partial<GlobalSettings>) => void
+ }
+ 
++// Why wallpaper first: it shows the user's wallpaper rather than whatever window sits behind, at the lowest cost.
++const PREFERRED_MATERIALS: readonly WindowMaterial[] = ['wallpaper', 'blur', 'translucent']
++const GLASS_DEFAULT_OPACITY = 0.6
++
++/** Enabling glass also supplies a backdrop when there is none, so the switch works in one step. */
++function glassEnableUpdates(settings: GlobalSettings): Partial<GlobalSettings> {
++  const updates: Partial<GlobalSettings> = { glassInterface: true }
++  if ((settings.terminalBackgroundOpacity ?? 1) >= 1) {
++    updates.terminalBackgroundOpacity = GLASS_DEFAULT_OPACITY
++  }
++  const host = rendererWindowMaterialHost()
++  if (!isWebClientLocation() && windowMaterialPreference(settings, host.platform) === 'off') {
++    const selectable = selectableWindowMaterials(host)
++    const material = PREFERRED_MATERIALS.find((option) => selectable.includes(option))
++    if (material) {
++      updates.windowMaterial = material
++    }
++  }
++  return updates
++}
++
+ export function GlassInterfaceSetting({
+   settings,
+   updateSettings
+@@ -24,15 +53,22 @@ export function GlassInterfaceSetting({
+         )
+       : t(
+           'settings.windowMaterial.glassInterfaceDescription',
+-          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++          'Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.'
+         )
+ 
+   return (
+-    <SettingsSwitchRow
+-      label={label}
+-      description={description}
+-      checked={enabled}
+-      onChange={() => updateSettings({ glassInterface: !enabled })}
+-    />
++    <>
++      <SettingsSwitchRow
++        label={label}
++        description={description}
++        checked={enabled}
++        onChange={() =>
++          updateSettings(enabled ? { glassInterface: false } : glassEnableUpdates(settings))
++        }
++      />
++      {enabled && !isWebClientLocation() && windowMaterialRestartPending(settings) ? (
++        <RestartBanner />
++      ) : null}
++    </>
+   )
+ }
+diff --git a/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx b/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
+index a7c6c0d7..f85be1fa 100644
+--- a/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
++++ b/src/renderer/src/components/settings/appearance/WindowMaterialSetting.tsx
+@@ -37,6 +37,9 @@ function windowMaterialLabel(
+   if (material === 'translucent') {
+     return t('settings.windowMaterial.translucent', 'Translucent')
+   }
++  if (material === 'wallpaper') {
++    return t('settings.windowMaterial.wallpaper', 'Desktop wallpaper')
++  }
+   return host.platform === 'win32'
+     ? t('settings.windowMaterial.acrylic', 'Acrylic blur')
+     : t('settings.windowMaterial.blur', 'Blurred')
+@@ -80,7 +83,7 @@ function windowMaterialHint(
+     : description
+ }
+ 
+-function RestartBanner(): React.JSX.Element {
++export function RestartBanner(): React.JSX.Element {
+   const t = useTranslate()
+   const [relaunching, setRelaunching] = useState(false)
+   const mountedRef = useMountedRef()
+@@ -128,6 +131,17 @@ function RestartBanner(): React.JSX.Element {
+   )
+ }
+ 
++/** The window would be created with a different material than it was; opacity and Reduce Visual Effects count too. */
++export function windowMaterialRestartPending(settings: GlobalSettings): boolean {
++  return (
++    resolveWindowMaterial(
++      settings,
++      rendererWindowMaterialHost(),
++      readPrefersReducedTransparency()
++    ) !== activeWindowMaterial()
++  )
++}
++
+ /** Desktop main window only; the web client cannot create or restart the host's window. */
+ export function WindowMaterialSetting({
+   settings,
+@@ -137,10 +151,8 @@ export function WindowMaterialSetting({
+   const host = rendererWindowMaterialHost()
+   const selectable = selectableWindowMaterials(host)
+   const label = t('settings.windowMaterial.fc2ba9b528', 'Window material')
+-  // Why compare resolved values: opacity and Reduce Visual Effects also decide the material.
+-  const restartPending =
+-    resolveWindowMaterial(settings, host, readPrefersReducedTransparency()) !==
+-    activeWindowMaterial()
++  // Why glass owns it when on: enabling glass sets the material, and search may show only that row.
++  const showRestart = windowMaterialRestartPending(settings) && settings.glassInterface !== true
+ 
+   return (
+     <>
+@@ -171,7 +183,7 @@ export function WindowMaterialSetting({
+           </Select>
+         }
+       />
+-      {restartPending ? <RestartBanner /> : null}
++      {showRestart ? <RestartBanner /> : null}
+     </>
+   )
+ }
+diff --git a/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx b/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
+index 341706cb..2b0862ce 100644
+--- a/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
++++ b/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
+@@ -90,9 +90,10 @@ export function TerminalWindowSection({
+         title={t('settings.windowMaterial.glassInterface', 'Glass interface')}
+         description={t(
+           'settings.windowMaterial.glassInterfaceDescription',
+-          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++          'Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.'
+         )}
+-        keywords={['glass', 'acrylic', 'translucent', 'transparency', 'sidebar', 'blur']}
++        keywords={['glass', 'acrylic', 'wallpaper', 'translucent', 'transparency', 'sidebar']}
++        className="space-y-3 py-2"
+       >
+         <GlassInterfaceSetting settings={settings} updateSettings={updateSettings} />
+       </SearchableSetting>
+diff --git a/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts b/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
+index ca01de2a..04f012fd 100644
+--- a/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
++++ b/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
+@@ -47,7 +47,7 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
+     title: translate('settings.windowMaterial.glassInterface', 'Glass interface'),
+     description: translate(
+       'settings.windowMaterial.glassInterfaceDescription',
+-      'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++      'Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.'
+     ),
+     keywords: [
+       ...translateSearchKeyword('settings.windowMaterial.keywords.glass', 'glass'),
+diff --git a/src/renderer/src/i18n/locales/en.json b/src/renderer/src/i18n/locales/en.json
+index e2e7bef7..c0e1e748 100644
+--- a/src/renderer/src/i18n/locales/en.json
++++ b/src/renderer/src/i18n/locales/en.json
+@@ -1753,6 +1753,7 @@
+       "description": "What shows behind translucent terminals. Requires restart.",
+       "off": "Opaque",
+       "translucent": "Translucent",
++      "wallpaper": "Desktop wallpaper",
+       "acrylic": "Acrylic blur",
+       "blur": "Blurred",
+       "reducedEffects": "Off while Reduce Visual Effects or the system Reduce Transparency setting is on.",
+@@ -1765,7 +1766,7 @@
+         "sidebar": "sidebar"
+       },
+       "glassInterface": "Glass interface",
+-      "glassInterfaceDescription": "Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.",
++      "glassInterfaceDescription": "Sidebars, tab bars, the status bar and the editor become tinted glass. Their tint follows Background opacity.",
+       "glassInterfaceNeedsBackdrop": "Shows once a window material or theme image is active and Background opacity is below 1.",
+       "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
+       "fc2ba9b528": "Window material"
+diff --git a/src/shared/app-lifecycle/windows/window-material.ts b/src/shared/app-lifecycle/windows/window-material.ts
+index 4956ca30..09f13016 100644
+--- a/src/shared/app-lifecycle/windows/window-material.ts
++++ b/src/shared/app-lifecycle/windows/window-material.ts
+@@ -1,5 +1,6 @@
+-/** What sits behind the main window's translucent surfaces: nothing, the desktop, or the blurred desktop. */
+-export type WindowMaterial = 'off' | 'translucent' | 'blur'
++/** What sits behind the main window's translucent surfaces: nothing, the desktop, the blurred
++ *  desktop, or (Windows 11) the desktop wallpaper alone, sampled once instead of blurred live. */
++export type WindowMaterial = 'off' | 'translucent' | 'blur' | 'wallpaper'
+ 
+ const WINDOW_MATERIAL_ARGUMENT_PREFIX = '--orca-window-material='
+ 
+@@ -17,7 +18,7 @@ export type WindowMaterialSettings = {
+ type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }
+ 
+ function isWindowMaterial(value: unknown): value is WindowMaterial {
+-  return value === 'off' || value === 'translucent' || value === 'blur'
++  return value === 'off' || value === 'translucent' || value === 'blur' || value === 'wallpaper'
+ }
+ 
+ /** The user's choice. Profiles from before `windowMaterial` carry it in the legacy blur switch,
+@@ -45,7 +46,7 @@ export function selectableWindowMaterials(host: WindowMaterialHost): readonly Wi
+   }
+   if (host.platform === 'win32') {
+     const build = Number(host.osRelease.split('.')[2])
+-    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'blur'] : ['off']
++    return build >= WINDOWS_BACKDROP_MIN_BUILD ? ['off', 'wallpaper', 'blur'] : ['off']
+   }
+   return ['off', 'translucent']
+ }
+@@ -59,8 +60,10 @@ export function hostWindowMaterial(
+   if (selectable.includes(material)) {
+     return material
+   }
+-  // Why only blur degrades: unblurred see-through never silently becomes a blur effect.
+-  return material === 'blur' && selectable.includes('translucent') ? 'translucent' : 'off'
++  // Why blur-ward only: unblurred see-through never silently becomes a blur effect.
++  const fallbacks: readonly WindowMaterial[] =
++    material === 'wallpaper' ? ['blur', 'translucent'] : material === 'blur' ? ['translucent'] : []
++  return fallbacks.find((fallback) => selectable.includes(fallback)) ?? 'off'
+ }
+ 
+ /**
+-- 
+2.43.0
+

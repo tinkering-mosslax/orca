@@ -1,0 +1,210 @@
+name: Personal Windows build
+
+# Rebuilds each official Orca release with the patches in personal/patches and publishes it here,
+# so a personal install keeps updating (its updater reads this repo's releases, see personalize.mjs).
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if this release already exists here
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+    paths:
+      - 'personal/**'
+      - '.github/workflows/personal-build.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: personal-build
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - name: Find the newest official release
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE: ${{ github.event_name == 'push' || inputs.force == true }}
+        run: |
+          set -euo pipefail
+          tag="$(gh api repos/stablyai/orca/releases/latest --jq .tag_name)"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Unexpected official release tag '$tag'"
+            exit 1
+          fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          if [[ "$FORCE" != true ]] && gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
+            echo "$tag is already built here; nothing to do."
+            echo "build=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "Building $tag"
+            echo "build=true" >>"$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-2022
+    timeout-minutes: 150
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+      ORCA_BACKGROUND_LAUNCH: '1'
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout the official release
+        uses: actions/checkout@v6
+        with:
+          repository: stablyai/orca
+          ref: ${{ needs.plan.outputs.tag }}
+          # History lets patches made against an older release merge 3-way into this one.
+          fetch-depth: 400
+          persist-credentials: false
+
+      - name: Checkout the personal kit
+        uses: actions/checkout@v6
+        with:
+          path: .personal-kit
+          sparse-checkout: personal
+          persist-credentials: false
+
+      - name: Apply personal patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG="$(cygpath -u "$RUNNER_TEMP")/personal-build.log"
+          echo "LOG=$LOG" >>"$GITHUB_ENV"
+          echo "OFFICIAL_COMMIT=$(git rev-parse HEAD)" >>"$GITHUB_ENV"
+          exec > >(tee -a "$LOG") 2>&1
+          echo "== $TAG: applying patches"
+          git config user.name 'personal-build'
+          git config user.email 'personal-build@users.noreply.github.com'
+          if ! git am -3 .personal-kit/personal/patches/*.patch; then
+            git am --show-current-patch=diff | head -80 || true
+            git am --abort || true
+            echo "::error::A personal patch no longer applies to $TAG; the previous personal release stays current."
+            exit 1
+          fi
+          node .personal-kit/personal/personalize.mjs "$GITHUB_REPOSITORY"
+          version="$(node -p "require('./package.json').version")"
+          if [[ "v$version" != "$TAG" ]]; then
+            echo "::error::package.json version $version does not match $TAG"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
+          restore-keys: |
+            electron-builder-win-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$LOG") 2>&1
+          echo "== install"
+          for attempt in 1 2 3; do
+            pnpm install --frozen-lockfile && break
+            [[ $attempt == 3 ]] && exit 1
+            sleep 30
+          done
+          (cd mobile && pnpm install --frozen-lockfile)
+
+      - name: Build app
+        shell: bash
+        env:
+          ORCA_RELEASE_JAVASCRIPT_BUILD_IDENTITY: dev
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$LOG") 2>&1
+          echo "== build:release"
+          pnpm build:release
+
+      - name: Package Windows installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$LOG") 2>&1
+          echo "== package"
+          export ORCA_BUILD_COMMIT="$OFFICIAL_COMMIT"
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
+          pnpm exec electron-builder --config config/electron-builder.personal.cjs --win --publish never
+          for required in orca-windows-setup.exe orca-windows-setup.exe.blockmap latest.yml; do
+            if [[ ! -s "dist/$required" ]]; then
+              echo "::error::Missing or empty dist/$required"
+              exit 1
+            fi
+          done
+
+      # Draft first: the updater must never see a release whose installer is still uploading.
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          exec > >(tee -a "$LOG") 2>&1
+          echo "== publish"
+          files=(dist/orca-windows-setup.exe dist/orca-windows-setup.exe.blockmap dist/latest.yml)
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json tagName >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --draft \
+              --title "Orca ${TAG#v} (personal)" \
+              --notes "Official Orca ${TAG#v} with the personal patches applied. Upstream notes: https://github.com/stablyai/orca/releases/tag/$TAG"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          fi
+          echo "Published $TAG"
+
+      # The run log is readable over git, which works where the GitHub website and API do not.
+      - name: Save run log
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS: ${{ job.status }}
+        run: |
+          set -uo pipefail
+          dir="$(cygpath -u "$RUNNER_TEMP")/build-log"
+          mkdir -p "$dir" && cd "$dir"
+          git init -q && git checkout -q -b personal-build-log
+          { echo "tag: $TAG"; echo "status: $STATUS"; echo "run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"; } > status.txt
+          tail -n 4000 "${LOG:-/nonexistent}" > build.log 2>/dev/null || echo "(no log)" > build.log
+          git add . && git -c user.name=personal-build -c user.email=personal-build@users.noreply.github.com commit -qm "$TAG $STATUS"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" personal-build-log

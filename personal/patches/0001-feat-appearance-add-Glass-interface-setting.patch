@@ -1,0 +1,285 @@
+From fc2d9427e7bc974eaac7a8ec071b25eb83ec72f1 Mon Sep 17 00:00:00 2001
+From: Orca Glass <noreply@anthropic.com>
+Date: Sun, 22 Nov 2026 13:57:59 +0000
+Subject: [PATCH 1/2] feat(appearance): add Glass interface setting
+
+Turns the sidebars, tab strips, title bar and status bar into tinted glass
+over the window material or theme image, so the whole window reads as one
+translucent surface instead of only the terminals. Tokens are re-declared on
+#root so the editor theme, plugin frames, menus and dialogs keep the opaque
+palette. Tint follows Background opacity; off under Reduce Visual Effects.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01BzRYcB3nt6GJFqwqhLuiSY
+---
+ .../applying-settings/settings-update.ts      |  3 ++
+ .../app-shell/appearance/glass-interface.ts   | 17 ++++++++
+ .../appearance/use-document-appearance.ts     |  5 +++
+ src/renderer/src/assets/glass-interface.css   | 42 +++++++++++++++++++
+ src/renderer/src/assets/main.css              |  1 +
+ .../appearance/GlassInterfaceSetting.tsx      | 38 +++++++++++++++++
+ .../appearance/TerminalWindowSection.tsx      | 12 ++++++
+ .../appearance/terminal-window-search.ts      | 16 +++++++
+ src/renderer/src/i18n/locales/en.json         |  7 +++-
+ .../app-lifecycle/windows/window-material.ts  |  2 +
+ 10 files changed, 142 insertions(+), 1 deletion(-)
+ create mode 100644 src/renderer/src/app-shell/appearance/glass-interface.ts
+ create mode 100644 src/renderer/src/assets/glass-interface.css
+ create mode 100644 src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+
+diff --git a/src/main/persistence/applying-settings/settings-update.ts b/src/main/persistence/applying-settings/settings-update.ts
+index 1904bdef..d541798f 100644
+--- a/src/main/persistence/applying-settings/settings-update.ts
++++ b/src/main/persistence/applying-settings/settings-update.ts
+@@ -75,6 +75,9 @@ export function updateSettings(
+   if ('minimizeToTrayOnClose' in updates) {
+     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
+   }
++  if ('glassInterface' in updates) {
++    sanitizedUpdates.glassInterface = updates.glassInterface === true
++  }
+   if ('showMenuBarIcon' in updates) {
+     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+   }
+diff --git a/src/renderer/src/app-shell/appearance/glass-interface.ts b/src/renderer/src/app-shell/appearance/glass-interface.ts
+new file mode 100644
+index 00000000..28efd479
+--- /dev/null
++++ b/src/renderer/src/app-shell/appearance/glass-interface.ts
+@@ -0,0 +1,17 @@
++import { useEffect } from 'react'
++import { useWindowBackdropActive } from './window-backdrop'
++
++/** Lets glass-interface.css tint the chrome; only meaningful while a backdrop shows through. */
++export function useGlassInterface(enabled: boolean, reduceEffects: boolean): void {
++  const backdropActive = useWindowBackdropActive()
++  const active = enabled && backdropActive && !reduceEffects
++
++  useEffect(() => {
++    const root = document.documentElement
++    if (active) {
++      root.dataset.glassInterface = ''
++    } else {
++      delete root.dataset.glassInterface
++    }
++  }, [active])
++}
+diff --git a/src/renderer/src/app-shell/appearance/use-document-appearance.ts b/src/renderer/src/app-shell/appearance/use-document-appearance.ts
+index f137ec93..50604f7b 100644
+--- a/src/renderer/src/app-shell/appearance/use-document-appearance.ts
++++ b/src/renderer/src/app-shell/appearance/use-document-appearance.ts
+@@ -6,6 +6,7 @@ import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-co
+ import { useSplitDividerSetting } from '@/hooks/theme/use-split-divider-setting'
+ import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
+ import { applyThemeBackground } from './theme-background'
++import { useGlassInterface } from './glass-interface'
+ import { syncThemeBackgroundVideo } from './theme-background-video'
+ import { usePrefersReducedMotion } from '../../hooks/theme/usePrefersReducedMotion'
+ import { useWindowActive } from '../../lib/window-activity/use-window-active'
+@@ -58,6 +59,10 @@ export function useDocumentAppearance(): void {
+   usePluginFontRegistration()
+   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
+   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
++  useGlassInterface(
++    useAppStore((s) => s.settings?.glassInterface === true),
++    reduceEffects
++  )
+   useEffect(() => {
+     document.documentElement.style.setProperty(
+       '--orca-window-surface-opacity',
+diff --git a/src/renderer/src/assets/glass-interface.css b/src/renderer/src/assets/glass-interface.css
+new file mode 100644
+index 00000000..a3c498c1
+--- /dev/null
++++ b/src/renderer/src/assets/glass-interface.css
+@@ -0,0 +1,42 @@
++/* Glass interface: app chrome turns into tinted glass over the window material or theme image.
++   Tokens are re-declared on #root, not :root, so code reading :root (editor theme, plugin
++   frames, contrast checks) and portaled menus and dialogs keep the opaque palette. */
++:root[data-glass-interface] {
++  --glass-src-background: var(--background);
++  --glass-src-foreground: var(--foreground);
++  --glass-src-card: var(--card);
++  --glass-src-sidebar: var(--sidebar);
++  --glass-src-worktree-sidebar: var(--worktree-sidebar);
++  --glass-src-tab-bar: var(--tab-bar, var(--card));
++  /* Chrome carries a little more tint than terminals so its small text stays legible. */
++  --glass-tint: calc(min(1, var(--orca-window-surface-opacity, 1) + 0.12) * 100%);
++}
++
++:root[data-glass-interface] #root {
++  --background: color-mix(in srgb, var(--glass-src-background) var(--glass-tint), transparent);
++  --card: color-mix(in srgb, var(--glass-src-card) var(--glass-tint), transparent);
++  --sidebar: color-mix(in srgb, var(--glass-src-sidebar) var(--glass-tint), transparent);
++  --worktree-sidebar: color-mix(
++    in srgb,
++    var(--glass-src-worktree-sidebar) var(--glass-tint),
++    transparent
++  );
++  --tab-bar: color-mix(in srgb, var(--glass-src-tab-bar) var(--glass-tint), transparent);
++  /* Fills drawn on glass are washes of the text color so they never stack into a solid block. */
++  --muted: color-mix(in srgb, var(--glass-src-foreground) 7%, transparent);
++  --secondary: color-mix(in srgb, var(--glass-src-foreground) 7%, transparent);
++  --accent: color-mix(in srgb, var(--glass-src-foreground) 12%, transparent);
++  --sidebar-accent: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
++  --worktree-sidebar-accent: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
++  --tab-inactive: transparent;
++  --tab-active: color-mix(in srgb, var(--glass-src-foreground) 8%, transparent);
++  --border: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
++  --sidebar-border: var(--border);
++  --worktree-sidebar-border: var(--border);
++}
++
++/* Sticky rows sit over scrolled content; frost them instead of letting rows show through. */
++:root[data-glass-interface] #root [data-worktree-sticky-header] {
++  background-color: transparent;
++  backdrop-filter: blur(12px);
++}
+diff --git a/src/renderer/src/assets/main.css b/src/renderer/src/assets/main.css
+index de95b995..cf62eda8 100644
+--- a/src/renderer/src/assets/main.css
++++ b/src/renderer/src/assets/main.css
+@@ -9,6 +9,7 @@
+ @import './terminal.css';
+ @import './mobile-page.css';
+ @import './text-shimmer.css';
++@import './glass-interface.css';
+ @import '../../../shared/styles/scrollbar-sleek.css';
+ 
+ @font-face {
+diff --git a/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+new file mode 100644
+index 00000000..d3d3f028
+--- /dev/null
++++ b/src/renderer/src/components/settings/appearance/GlassInterfaceSetting.tsx
+@@ -0,0 +1,38 @@
++import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
++import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
++import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
++import { useTranslate } from '@/i18n/use-translate'
++
++type GlassInterfaceSettingProps = {
++  settings: GlobalSettings
++  updateSettings: (updates: Partial<GlobalSettings>) => void
++}
++
++export function GlassInterfaceSetting({
++  settings,
++  updateSettings
++}: GlassInterfaceSettingProps): React.JSX.Element {
++  const t = useTranslate()
++  const backdropActive = useWindowBackdropActive()
++  const enabled = settings.glassInterface === true
++  const label = t('settings.windowMaterial.glassInterface', 'Glass interface')
++  const description =
++    enabled && !backdropActive
++      ? t(
++          'settings.windowMaterial.glassInterfaceNeedsBackdrop',
++          'Shows once a window material or theme image is active and Background opacity is below 1.'
++        )
++      : t(
++          'settings.windowMaterial.glassInterfaceDescription',
++          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++        )
++
++  return (
++    <SettingsSwitchRow
++      label={label}
++      description={description}
++      checked={enabled}
++      onChange={() => updateSettings({ glassInterface: !enabled })}
++    />
++  )
++}
+diff --git a/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx b/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
+index 4793ed6d..341706cb 100644
+--- a/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
++++ b/src/renderer/src/components/settings/terminal/appearance/TerminalWindowSection.tsx
+@@ -13,6 +13,7 @@ import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
+ import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
+ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+ import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
++import { GlassInterfaceSetting } from '../../appearance/GlassInterfaceSetting'
+ import { useTranslate } from '@/i18n/use-translate'
+ import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
+ import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
+@@ -85,6 +86,17 @@ export function TerminalWindowSection({
+         </SearchableSetting>
+       )}
+ 
++      <SearchableSetting
++        title={t('settings.windowMaterial.glassInterface', 'Glass interface')}
++        description={t(
++          'settings.windowMaterial.glassInterfaceDescription',
++          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++        )}
++        keywords={['glass', 'acrylic', 'translucent', 'transparency', 'sidebar', 'blur']}
++      >
++        <GlassInterfaceSetting settings={settings} updateSettings={updateSettings} />
++      </SearchableSetting>
++
+       <SearchableSetting
+         title={t('auto.components.settings.TerminalWindowSection.2d8a13cabd', 'Horizontal padding')}
+         description={t(
+diff --git a/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts b/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
+index dcc841fc..ca01de2a 100644
+--- a/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
++++ b/src/renderer/src/components/settings/terminal/appearance/terminal-window-search.ts
+@@ -43,6 +43,22 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
+       ...translateSearchKeyword('settings.windowMaterial.keywords.acrylic', 'acrylic')
+     ]
+   },
++  {
++    title: translate('settings.windowMaterial.glassInterface', 'Glass interface'),
++    description: translate(
++      'settings.windowMaterial.glassInterfaceDescription',
++      'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
++    ),
++    keywords: [
++      ...translateSearchKeyword('settings.windowMaterial.keywords.glass', 'glass'),
++      ...translateSearchKeyword('settings.windowMaterial.keywords.acrylic', 'acrylic'),
++      ...translateSearchKeyword(
++        'auto.components.settings.terminal.search.4f7f8f28ca',
++        'transparency'
++      ),
++      ...translateSearchKeyword('settings.windowMaterial.keywords.sidebar', 'sidebar')
++    ]
++  },
+   {
+     title: translate('auto.components.settings.terminal.search.cfdaed8dae', 'Horizontal padding'),
+     description: translate(
+diff --git a/src/renderer/src/i18n/locales/en.json b/src/renderer/src/i18n/locales/en.json
+index ab734eef..e2e7bef7 100644
+--- a/src/renderer/src/i18n/locales/en.json
++++ b/src/renderer/src/i18n/locales/en.json
+@@ -1760,8 +1760,13 @@
+       "linuxCompositor": "Your compositor decides whether to blur it. Requires restart.",
+       "restartDescription": "Restart Orca to apply the window material change.",
+       "keywords": {
+-        "acrylic": "acrylic"
++        "acrylic": "acrylic",
++        "glass": "glass",
++        "sidebar": "sidebar"
+       },
++      "glassInterface": "Glass interface",
++      "glassInterfaceDescription": "Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.",
++      "glassInterfaceNeedsBackdrop": "Shows once a window material or theme image is active and Background opacity is below 1.",
+       "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
+       "fc2ba9b528": "Window material"
+     },
+diff --git a/src/shared/app-lifecycle/windows/window-material.ts b/src/shared/app-lifecycle/windows/window-material.ts
+index f45aa131..4956ca30 100644
+--- a/src/shared/app-lifecycle/windows/window-material.ts
++++ b/src/shared/app-lifecycle/windows/window-material.ts
+@@ -10,6 +10,8 @@ export type WindowMaterialSettings = {
+   windowBackgroundBlur?: boolean
+   /** Drops modal/backdrop blur and the window material for remote or GPU-less sessions (#20936). */
+   reduceVisualEffects?: boolean
++  /** Sidebars, tab strips and status bar turn to tinted glass over the window backdrop. */
++  glassInterface?: boolean
+ }
+ 
+ type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }
+-- 
+2.43.0
+
