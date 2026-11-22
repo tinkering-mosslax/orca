@@ -13,6 +13,7 @@ import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
+import { GlassInterfaceSetting } from '../../appearance/GlassInterfaceSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
@@ -84,6 +85,17 @@ export function TerminalWindowSection({
           <WindowMaterialSetting settings={settings} updateSettings={updateSettings} />
         </SearchableSetting>
       )}
+
+      <SearchableSetting
+        title={t('settings.windowMaterial.glassInterface', 'Glass interface')}
+        description={t(
+          'settings.windowMaterial.glassInterfaceDescription',
+          'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
+        )}
+        keywords={['glass', 'acrylic', 'translucent', 'transparency', 'sidebar', 'blur']}
+      >
+        <GlassInterfaceSetting settings={settings} updateSettings={updateSettings} />
+      </SearchableSetting>
 
       <SearchableSetting
         title={t('auto.components.settings.TerminalWindowSection.2d8a13cabd', 'Horizontal padding')}

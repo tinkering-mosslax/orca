@@ -1768,8 +1768,13 @@
       "linuxCompositor": "Your compositor decides whether to blur it. Requires restart.",
       "restartDescription": "Restart Orca to apply the window material change.",
       "keywords": {
-        "acrylic": "acrylic"
+        "acrylic": "acrylic",
+        "glass": "glass",
+        "sidebar": "sidebar"
       },
+      "glassInterface": "Glass interface",
+      "glassInterfaceDescription": "Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.",
+      "glassInterfaceNeedsBackdrop": "Shows once a window material or theme image is active and Background opacity is below 1.",
       "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
       "fc2ba9b528": "Window material"
     },

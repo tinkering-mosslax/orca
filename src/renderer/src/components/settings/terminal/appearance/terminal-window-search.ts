@@ -44,6 +44,22 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('settings.windowMaterial.glassInterface', 'Glass interface'),
+    description: translate(
+      'settings.windowMaterial.glassInterfaceDescription',
+      'Sidebars, tab bars and the status bar become tinted glass. Their tint follows Background opacity.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.windowMaterial.keywords.glass', 'glass'),
+      ...translateSearchKeyword('settings.windowMaterial.keywords.acrylic', 'acrylic'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.4f7f8f28ca',
+        'transparency'
+      ),
+      ...translateSearchKeyword('settings.windowMaterial.keywords.sidebar', 'sidebar')
+    ]
+  },
+  {
     title: translate('auto.components.settings.terminal.search.cfdaed8dae', 'Horizontal padding'),
     description: translate(
       'auto.components.settings.terminal.search.75691e4911',

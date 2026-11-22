@@ -75,6 +75,9 @@ export function updateSettings(
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
   }
+  if ('glassInterface' in updates) {
+    sanitizedUpdates.glassInterface = updates.glassInterface === true
+  }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }

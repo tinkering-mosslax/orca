@@ -6,6 +6,7 @@ import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-co
 import { useSplitDividerSetting } from '@/hooks/theme/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyThemeBackground } from './theme-background'
+import { useGlassInterface } from './glass-interface'
 import { syncThemeBackgroundVideo } from './theme-background-video'
 import { usePrefersReducedMotion } from '../../hooks/theme/usePrefersReducedMotion'
 import { useWindowActive } from '../../lib/window-activity/use-window-active'
@@ -58,6 +59,10 @@ export function useDocumentAppearance(): void {
   usePluginFontRegistration()
   const reduceEffects = useReduceVisualEffects(useAppStore((s) => s.settings?.reduceVisualEffects))
   const surfaceOpacity = useAppStore((s) => s.settings?.terminalBackgroundOpacity ?? 1)
+  useGlassInterface(
+    useAppStore((s) => s.settings?.glassInterface === true),
+    reduceEffects
+  )
   useEffect(() => {
     document.documentElement.style.setProperty(
       '--orca-window-surface-opacity',

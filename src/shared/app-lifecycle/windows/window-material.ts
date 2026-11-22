@@ -10,6 +10,8 @@ export type WindowMaterialSettings = {
   windowBackgroundBlur?: boolean
   /** Drops modal/backdrop blur and the window material for remote or GPU-less sessions (#20936). */
   reduceVisualEffects?: boolean
+  /** Sidebars, tab strips and status bar turn to tinted glass over the window backdrop. */
+  glassInterface?: boolean
 }
 
 type WindowMaterialInputs = WindowMaterialSettings & { terminalBackgroundOpacity?: number }

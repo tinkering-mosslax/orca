@@ -1,0 +1,42 @@
+/* Glass interface: app chrome turns into tinted glass over the window material or theme image.
+   Tokens are re-declared on #root, not :root, so code reading :root (editor theme, plugin
+   frames, contrast checks) and portaled menus and dialogs keep the opaque palette. */
+:root[data-glass-interface] {
+  --glass-src-background: var(--background);
+  --glass-src-foreground: var(--foreground);
+  --glass-src-card: var(--card);
+  --glass-src-sidebar: var(--sidebar);
+  --glass-src-worktree-sidebar: var(--worktree-sidebar);
+  --glass-src-tab-bar: var(--tab-bar, var(--card));
+  /* Chrome carries a little more tint than terminals so its small text stays legible. */
+  --glass-tint: calc(min(1, var(--orca-window-surface-opacity, 1) + 0.12) * 100%);
+}
+
+:root[data-glass-interface] #root {
+  --background: color-mix(in srgb, var(--glass-src-background) var(--glass-tint), transparent);
+  --card: color-mix(in srgb, var(--glass-src-card) var(--glass-tint), transparent);
+  --sidebar: color-mix(in srgb, var(--glass-src-sidebar) var(--glass-tint), transparent);
+  --worktree-sidebar: color-mix(
+    in srgb,
+    var(--glass-src-worktree-sidebar) var(--glass-tint),
+    transparent
+  );
+  --tab-bar: color-mix(in srgb, var(--glass-src-tab-bar) var(--glass-tint), transparent);
+  /* Fills drawn on glass are washes of the text color so they never stack into a solid block. */
+  --muted: color-mix(in srgb, var(--glass-src-foreground) 7%, transparent);
+  --secondary: color-mix(in srgb, var(--glass-src-foreground) 7%, transparent);
+  --accent: color-mix(in srgb, var(--glass-src-foreground) 12%, transparent);
+  --sidebar-accent: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
+  --worktree-sidebar-accent: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
+  --tab-inactive: transparent;
+  --tab-active: color-mix(in srgb, var(--glass-src-foreground) 8%, transparent);
+  --border: color-mix(in srgb, var(--glass-src-foreground) 9%, transparent);
+  --sidebar-border: var(--border);
+  --worktree-sidebar-border: var(--border);
+}
+
+/* Sticky rows sit over scrolled content; frost them instead of letting rows show through. */
+:root[data-glass-interface] #root [data-worktree-sticky-header] {
+  background-color: transparent;
+  backdrop-filter: blur(12px);
+}
